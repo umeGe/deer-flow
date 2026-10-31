@@ -185,6 +185,18 @@ class JsonlRunEventStore(RunEventStore):
         path = self._run_file(record["thread_id"], record["run_id"])
         self._append_records(path, [record])
 
+    @staticmethod
+    def _is_replayable_record(record: object) -> bool:
+        """Return whether a decoded JSONL value is a RunEvent envelope record.
+
+        Every written record carries an integer ``seq`` and every read path
+        depends on it, so a decoded value without one (a scalar, an array, or a
+        partial object) is a malformed record rather than an event. Invalid JSON
+        is already skipped; this keeps the same promise for structurally wrong
+        records that still decode.
+        """
+        return isinstance(record, dict) and type(record.get("seq")) is int
+
     def _iter_records(self, path: Path) -> Iterator[dict]:
         """Read physical UTF-8 lines, skipping malformed or interrupted records."""
         with open(path, "rb") as f:
@@ -192,9 +204,14 @@ class JsonlRunEventStore(RunEventStore):
                 if not line.strip():
                     continue
                 try:
-                    yield json.loads(line.decode("utf-8"))
+                    record = json.loads(line.decode("utf-8"))
                 except (json.JSONDecodeError, UnicodeDecodeError):
                     logger.debug("Skipping malformed JSONL line in %s", path)
+                    continue
+                if not self._is_replayable_record(record):
+                    logger.warning("Skipping malformed JSONL record in %s", path)
+                    continue
+                yield record
 
     def _read_thread_events(self, thread_id: str) -> list[dict]:
         """Read all events for a thread, sorted by seq (blocking I/O)."""
