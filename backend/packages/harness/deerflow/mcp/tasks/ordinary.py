@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Literal, Protocol
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 from deerflow.constants import MCP_TASK_REMOTE_ID_MAX_LENGTH
 from deerflow.mcp.tasks.models import (
@@ -73,6 +73,16 @@ class _StatusPayload(BaseModel):
     input_required: dict[str, Any] | None = None
     poll_after_seconds: float | None = Field(default=None, gt=0, allow_inf_nan=False)
     model_config = ConfigDict(extra="ignore")
+
+    @field_validator("poll_after_seconds", mode="before")
+    @classmethod
+    def reject_boolean_poll_interval(cls, value: Any) -> Any:
+        # ``bool`` is a subclass of ``int`` and Pydantic otherwise coerces
+        # ``true`` to ``1.0``. A remote protocol typo must not silently change
+        # the task's polling cadence.
+        if isinstance(value, bool):
+            raise ValueError("poll_after_seconds must be a number, not a boolean")
+        return value
 
 
 class _CancelPayload(BaseModel):

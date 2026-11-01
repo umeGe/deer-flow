@@ -35,6 +35,12 @@ def test_snapshot_rejects_non_positive_poll_interval(interval):
         TaskSnapshot(status=TaskStatus.WORKING, poll_after_seconds=interval)
 
 
+@pytest.mark.parametrize("interval", [True, False])
+def test_snapshot_rejects_boolean_poll_interval(interval):
+    with pytest.raises(ValueError, match="poll_after_seconds"):
+        TaskSnapshot(status=TaskStatus.WORKING, poll_after_seconds=interval)
+
+
 def test_snapshot_keeps_valid_poll_interval_schedulable():
     snapshot = TaskSnapshot(status=TaskStatus.WORKING, poll_after_seconds=12.5)
     assert snapshot.poll_after_seconds == 12.5
